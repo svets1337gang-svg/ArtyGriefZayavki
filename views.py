@@ -503,7 +503,7 @@ async def process_decision(
         dm_text = (
             "❌ Заявка отклонена\n\n"
             "К сожалению, ваша заявка в команду проекта была отклонена.\n\n"
-            f"Подать новую заявку можно <t:{expires_at}:R> (<t:{expires_at}:f>)."
+            f"Подать новую заявку можно <t:{cooldown_expires}:R> (<t:{cooldown_expires}:f>)."
         )
 
     dm_ok = await send_dm(interaction.client, user_id, dm_text)
