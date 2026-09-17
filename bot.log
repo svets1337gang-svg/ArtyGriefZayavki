@@ -1,0 +1,59 @@
+[2026-09-17 17:19:07] [INFO    ] discord.client: logging in using static token
+[2026-09-17 17:19:07] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 17:19:08] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 17:19:08] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 96c6dccc9ed7f908c11e2945813e2d19).
+[2026-09-17 17:19:10] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 17:19:11] [INFO    ] bot: Создана новая панель заявок (message_id=1550134017171656825).
+[2026-09-17 17:19:48] [INFO    ] modals: Создана заявка 1: user=1488852220282798141 mode=FT message=1550134168388763691
+[2026-09-17 17:20:04] [INFO    ] views: Заявка 1 обработана модератором 1491378453415723009: status=Approved, role_ok=True, dm_ok=True
+[2026-09-17 17:26:30] [INFO    ] discord.client: logging in using static token
+[2026-09-17 17:26:30] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 17:26:31] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 17:26:31] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 15e6cd359669df10ef3ad2a8fbac70e1).
+[2026-09-17 17:26:33] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 17:26:34] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 17:27:04] [INFO    ] modals: Создана заявка 2: user=1488852220282798141 mode=FT message=1550136000632721450
+[2026-09-17 17:27:17] [INFO    ] views: Заявка 2 обработана модератором 1491378453415723009: status=Rejected, role_ok=True, dm_ok=True
+[2026-09-17 17:51:52] [INFO    ] discord.client: logging in using static token
+[2026-09-17 17:51:53] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 17:51:53] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 17:51:54] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 32be96f981fb94a5f88e625485620bde).
+[2026-09-17 17:51:56] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 17:51:57] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 17:53:45] [INFO    ] discord.client: logging in using static token
+[2026-09-17 17:53:46] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 17:53:46] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 17:53:47] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 8afe40ca06fbbe9e56470afd1f9b80dd).
+[2026-09-17 17:53:49] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 17:53:50] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 18:00:50] [INFO    ] discord.client: logging in using static token
+[2026-09-17 18:00:51] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 18:00:51] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 18:00:52] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 8b4058e3788687b96f2c79a4a38aeb6f).
+[2026-09-17 18:00:54] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 18:00:54] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 18:01:47] [INFO    ] modals: Создана заявка 3: user=1491378453415723009 mode=FT message=1550144735052562553
+[2026-09-17 18:01:58] [INFO    ] views: Заявка 3 обработана модератором 1491378453415723009: status=Rejected, role_ok=True, dm_ok=True
+[2026-09-17 18:04:15] [INFO    ] discord.client: logging in using static token
+[2026-09-17 18:04:15] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 18:04:16] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 18:04:16] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e8fc60c48962f34a2f4e8f28fa875249).
+[2026-09-17 18:04:18] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 18:04:19] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 18:07:15] [INFO    ] discord.client: logging in using static token
+[2026-09-17 18:07:16] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 18:07:16] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 1
+[2026-09-17 18:07:17] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 2637b469481fe9a70fb4c99e5b6709ef).
+[2026-09-17 18:07:19] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 18:07:20] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 18:13:57] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session 2637b469481fe9a70fb4c99e5b6709ef.
+[2026-09-17 18:32:09] [INFO    ] discord.client: logging in using static token
+[2026-09-17 18:32:10] [INFO    ] database: База данных инициализирована: applications.db
+[2026-09-17 18:32:10] [INFO    ] bot: Синхронизировано команд для гильдии 1546797625498538064: 2
+[2026-09-17 18:32:11] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 4ba008b10a47fcbbd46e4f2c5fc202cd).
+[2026-09-17 18:32:13] [INFO    ] bot: Бот запущен как zayavkitest#5616 (id=1550131628792094780).
+[2026-09-17 18:32:14] [INFO    ] bot: Панель заявок найдена и обновлена (message_id=1550134017171656825).
+[2026-09-17 18:32:34] [INFO    ] bot: Создана новая панель заявок (message_id=1550152484725727414).
+[2026-09-17 18:32:50] [INFO    ] bot: КД снят с пользователя 1491378453415723009 модератором 1491378453415723009 (role_ok=True, reason=роль отказа и так отсутствовала)
+[2026-09-17 18:33:13] [INFO    ] modals: Создана заявка 4: user=1491378453415723009 mode=FT message=1550152648580276295
+[2026-09-17 18:33:23] [INFO    ] views: Заявка 4 обработана модератором 1491378453415723009: status=Approved, role_ok=True, dm_ok=True
