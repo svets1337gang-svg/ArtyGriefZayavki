@@ -29,6 +29,7 @@ COLOR_REJECTED = discord.Color.red()
 PANEL_BUTTON_CUSTOM_ID = "application_panel:open"
 PANEL_MESSAGE_SETTING_KEY = "panel_message_id"
 PANEL_CHANNEL_SETTING_KEY = "panel_channel_id"
+RECRUITMENT_STATUS_SETTING_KEY = "recruitment_open"
 
 
 # --------------------------------------------------------------------------- #
@@ -83,6 +84,36 @@ def _clip(value: str, limit: int = 1024) -> str:
     return value
 
 
+def build_decision_dm_embed(*, approved: bool, cooldown_expires: Optional[int] = None) -> discord.Embed:
+    """Создаёт Embed для ЛС пользователю о решении по заявке."""
+    if approved:
+        embed = discord.Embed(
+            title="✅ Заявка одобрена",
+            description=(
+                "Ваша заявка в команду проекта была одобрена. Вам выдана роль «Кандидат». "
+                "Для дальнейшего прохождения отбора необходимо записаться на обзвон "
+                "в соответствующем канале."
+            ),
+            color=COLOR_APPROVED,
+            timestamp=dt.datetime.now(dt.timezone.utc),
+        )
+    else:
+        description = (
+            "К сожалению, ваша заявка в команду проекта была **отклонена**. "
+            "Вы сможете подать заявку повторно через **7 дней**."
+        )
+        if cooldown_expires:
+            description += f"\n\nТочное время: <t:{cooldown_expires}:f> (<t:{cooldown_expires}:R>)"
+
+        embed = discord.Embed(
+            title="❌ Заявка отклонена",
+            description=description,
+            color=COLOR_REJECTED,
+            timestamp=dt.datetime.now(dt.timezone.utc),
+        )
+    return embed
+
+
 def build_application_embed(
     *,
     application_id: int,
@@ -131,7 +162,13 @@ def build_application_embed(
     return embed
 
 
-async def send_dm(bot: discord.Client, user_id: int, content: str) -> bool:
+async def send_dm(
+    bot: discord.Client,
+    user_id: int,
+    content: str = "",
+    *,
+    embed: Optional[discord.Embed] = None,
+) -> bool:
     """Пытается отправить ЛС. Возвращает False, если ЛС закрыты/пользователь удалён."""
     try:
         user = bot.get_user(user_id) or await bot.fetch_user(user_id)
@@ -140,7 +177,7 @@ async def send_dm(bot: discord.Client, user_id: int, content: str) -> bool:
         return False
 
     try:
-        await user.send(content)
+        await user.send(content=content or None, embed=embed)
         return True
     except discord.Forbidden:
         log.warning("ЛС пользователя %s закрыты — сообщение не доставлено.", user_id)
@@ -172,6 +209,18 @@ class ApplicationPanelView(discord.ui.View):
     ) -> None:
         if interaction.guild is None:
             await safe_respond(interaction, "❌ Подать заявку можно только на сервере.")
+            return
+
+        # Проверка статуса набора
+        try:
+            is_open = await db.get_recruitment_status()
+        except Exception:
+            log.exception("Ошибка БД при проверке статуса набора.")
+            await safe_respond(interaction, "❌ Внутренняя ошибка. Попробуйте позже.")
+            return
+
+        if not is_open:
+            await safe_respond(interaction, "❌ **Набор закрыт!**")
             return
 
         try:
@@ -492,21 +541,8 @@ async def process_decision(
         log.warning("Не удалось обновить сообщение заявки %s: %s", application_id, exc)
 
     # ЛС пользователю.
-    if approve:
-        dm_text = (
-            "✅ Заявка одобрена\n\n"
-            "Ваша заявка в команду проекта была одобрена. Вам выдана роль «Кандидат».\n\n"
-            "Для дальнейшего прохождения отбора необходимо записаться на обзвон "
-            "в соответствующем канале."
-        )
-    else:
-        dm_text = (
-            "❌ Заявка отклонена\n\n"
-            "К сожалению, ваша заявка в команду проекта была отклонена.\n\n"
-            f"Подать новую заявку можно <t:{cooldown_expires}:R> (<t:{cooldown_expires}:f>)."
-        )
-
-    dm_ok = await send_dm(interaction.client, user_id, dm_text)
+    dm_embed = build_decision_dm_embed(approved=approve, cooldown_expires=cooldown_expires)
+    dm_ok = await send_dm(interaction.client, user_id, embed=dm_embed)
 
     # Итог модератору — честный, без «притворства».
     summary = [f"Заявка #{application_id}: статус **{new_status}**."]

@@ -313,3 +313,16 @@ def _set_setting(key: str, value: str) -> None:
 
 async def set_setting(key: str, value: str) -> None:
     await _run(_set_setting, key, str(value))
+
+
+async def get_recruitment_status() -> bool:
+    """Возвращает True, если набор открыт (по умолчанию открыт)."""
+    status = await get_setting("recruitment_open")
+    if status is None:
+        return True  # По умолчанию набор открыт
+    return status.lower() in ("1", "true", "yes")
+
+
+async def set_recruitment_status(is_open: bool) -> None:
+    """Устанавливает статус набора (открыт/закрыт)."""
+    await set_setting("recruitment_open", "true" if is_open else "false")

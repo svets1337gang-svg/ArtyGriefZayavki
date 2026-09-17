@@ -19,6 +19,7 @@ import database as db
 from views import (
     PANEL_CHANNEL_SETTING_KEY,
     PANEL_MESSAGE_SETTING_KEY,
+    RECRUITMENT_STATUS_SETTING_KEY,
     ApplicationPanelView,
     ApproveButton,
     RejectButton,
@@ -64,7 +65,11 @@ def setup_logging() -> None:
 # --------------------------------------------------------------------------- #
 # Панель заявок
 # --------------------------------------------------------------------------- #
-def build_panel_embed() -> discord.Embed:
+async def build_panel_embed() -> discord.Embed:
+    """Создаёт Embed панели заявок с актуальным статусом набора."""
+    is_open = await db.get_recruitment_status()
+    status_text = "Набор открыт" if is_open else "Набор закрыт"
+
     embed = discord.Embed(
         title=config.PANEL_TITLE,
         description=(
@@ -81,7 +86,7 @@ def build_panel_embed() -> discord.Embed:
         ),
         color=discord.Color.blurple(),
     )
-    embed.set_footer(text="Команда проекта • Набор открыт")
+    embed.set_footer(text=f"Команда проекта • {status_text}")
     return embed
 
 
@@ -107,7 +112,7 @@ async def ensure_application_panel(
         log.error("APPLICATION_PANEL_CHANNEL_ID указывает не на текстовый канал.")
         return None
 
-    embed = build_panel_embed()
+    embed = await build_panel_embed()
     view = ApplicationPanelView()
 
     if not force_new:
@@ -411,6 +416,71 @@ async def remove_cooldown(
         role_ok,
         role_reason,
     )
+
+
+@bot.tree.command(
+    name="закрытьнабор",
+    description="Закрыть набор в команду проекта.",
+)
+@app_commands.guild_only()
+async def close_recruitment(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        await db.set_recruitment_status(False)
+    except Exception:
+        log.exception("Ошибка БД при закрытии набора.")
+        await interaction.followup.send("❌ Не удалось закрыть набор (ошибка БД).", ephemeral=True)
+        return
+
+    # Обновляем панель заявок
+    message = await ensure_application_panel(bot)
+    if message is None:
+        log.warning("Набор закрыт, но панель не удалось обновить.")
+        await interaction.followup.send(
+            "✅ Набор закрыт.\n⚠️ Панель не удалось обновить — проверьте логи.",
+            ephemeral=True,
+        )
+    else:
+        await interaction.followup.send(
+            f"✅ **Набор закрыт.**\n\nПанель обновлена: {message.jump_url}",
+            ephemeral=True,
+        )
+
+    log.info("Набор закрыт модератором %s.", interaction.user.id)
+
+
+@bot.tree.command(
+    name="открытьнабор",
+    description="Открыть набор в команду проекта.",
+)
+@app_commands.guild_only()
+async def open_recruitment(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        await db.set_recruitment_status(True)
+    except Exception:
+        log.exception("Ошибка БД при открытии набора.")
+        await interaction.followup.send("❌ Не удалось открыть набор (ошибка БД).", ephemeral=True)
+        return
+
+    # Обновляем панель заявок
+    message = await ensure_application_panel(bot)
+    if message is None:
+        log.warning("Набор открыт, но панель не удалось обновить.")
+        await interaction.followup.send(
+            "✅ Набор открыт.\n⚠️ Панель не удалось обновить — проверьте логи.",
+            ephemeral=True,
+        )
+    else:
+        await interaction.followup.send(
+            f"✅ **Набор открыт.**\n\nПанель обновлена: {message.jump_url}",
+            ephemeral=True,
+        )
+
+    log.info("Набор открыт модератором %s.", interaction.user.id)
+
 
 @bot.tree.error
 async def on_app_command_error(
