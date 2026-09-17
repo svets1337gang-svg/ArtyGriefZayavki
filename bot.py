@@ -23,6 +23,7 @@ from views import (
     ApproveButton,
     RejectButton,
 )
+from web import web_server
 
 log = logging.getLogger("bot")
 
