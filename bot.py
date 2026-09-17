@@ -172,7 +172,7 @@ class ApplicationBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         await db.init_db()
-
+        await web_server.start()
         # Восстановление persistent-компонентов.
         self.add_view(ApplicationPanelView())
         self.add_dynamic_items(ApproveButton, RejectButton)
