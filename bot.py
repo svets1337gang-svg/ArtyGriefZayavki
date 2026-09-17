@@ -220,6 +220,7 @@ class ApplicationBot(commands.Bot):
     async def close(self) -> None:
         if self.cooldown_watcher.is_running():
             self.cooldown_watcher.cancel()
+        await web_server.stop()
         await super().close()
         await db.close_db()
 
