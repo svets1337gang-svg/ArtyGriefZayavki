@@ -68,15 +68,16 @@ class ApplicationModal(discord.ui.Modal, title="Заявка в команду �
         required=True,
         max_length=3,
     )
-    timezone: discord.ui.TextInput = discord.ui.TextInput(
-        label="Часовой пояс",
-        placeholder="Например: UTC+3 / МСК",
+    software: discord.ui.TextInput = discord.ui.TextInput(
+        label="Какими программами для проверок пользуетесь",
+        placeholder="Кроме AnyDesk и Discord.",
         style=discord.TextStyle.short,
         required=True,
         max_length=64,
     )
-    blacklist: discord.ui.TextInput = discord.ui.TextInput(
-        label="Были ли вы в ЧСП/ЧСС? Если да, то за что",
+    about: discord.ui.TextInput = discord.ui.TextInput(
+        label="Расскажите о себе",
+        placeholder="Например: чем занимаетесь, опыт, интересы",
         style=discord.TextStyle.paragraph,
         required=True,
         max_length=900,
@@ -126,11 +127,11 @@ class ApplicationModal(discord.ui.Modal, title="Заявка в команду �
             return
 
         nickname_value = normalize_line(self.nickname.value)
-        timezone_value = normalize_line(self.timezone.value)
-        blacklist_value = normalize_text(self.blacklist.value)
+        software_value = normalize_line(self.software.value)
+        about_value = normalize_text(self.about.value)
         motivation_value = normalize_text(self.motivation.value)
 
-        if not nickname_value or not timezone_value:
+        if not nickname_value or not software_value:
             await interaction.response.send_message(
                 "❌ Поля не могут состоять только из пробелов.", ephemeral=True
             )
@@ -200,8 +201,8 @@ class ApplicationModal(discord.ui.Modal, title="Заявка в команду �
             mode=self.mode,
             nickname=nickname_value,
             age=age_value,
-            timezone_text=timezone_value,
-            blacklist_text=blacklist_value,
+            software_text=software_value,
+            about_text=about_value,
             motivation_text=motivation_value,
             created_at=created_at,
         )
