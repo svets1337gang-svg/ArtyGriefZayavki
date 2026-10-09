@@ -251,8 +251,8 @@ def build_application_embed(
     mode: str,
     nickname: str,
     age: int,
-    timezone_text: str,
-    blacklist_text: str,
+    software_text: str,
+    about_text: str,
     motivation_text: str,
     created_at: dt.datetime,
 ) -> discord.Embed:
@@ -269,13 +269,13 @@ def build_application_embed(
     embed.add_field(name="Ник", value=_clip(discord.utils.escape_markdown(nickname)), inline=True)
     embed.add_field(name="Возраст", value=str(age), inline=True)
     embed.add_field(
-        name="Часовой пояс",
-        value=_clip(discord.utils.escape_markdown(timezone_text)),
+        name="Программы для проверок",
+        value=_clip(discord.utils.escape_markdown(software_text)),
         inline=True,
     )
     embed.add_field(
-        name="ЧСП/ЧСС",
-        value=_clip(discord.utils.escape_markdown(blacklist_text)),
+        name="О себе",
+        value=_clip(discord.utils.escape_markdown(about_text)),
         inline=False,
     )
     embed.add_field(
