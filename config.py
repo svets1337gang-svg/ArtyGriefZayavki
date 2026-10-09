@@ -89,6 +89,9 @@ MIN_AGE: int = _get_int("MIN_AGE", 14) or 14
 BLOCK_AFTER_APPROVAL: bool = _get_bool("BLOCK_AFTER_APPROVAL", False)
 MAX_AGE: int = 99
 
+# Роли, при наличии которых пользователь не может подать заявку (пусто = выключено).
+BLACKLIST_ROLE_IDS: List[int] = _get_int_list("BLACKLIST_ROLE_IDS")
+
 # --------------------------------------------------------------------------- #
 # Технические настройки
 # --------------------------------------------------------------------------- #
@@ -135,6 +138,9 @@ def validate() -> None:
 
     if COOLDOWN_CHECK_MINUTES <= 0:
         problems.append("COOLDOWN_CHECK_MINUTES должен быть положительным целым числом")
+
+    if -1 in BLACKLIST_ROLE_IDS:
+        problems.append("BLACKLIST_ROLE_IDS содержит некорректный ID (ожидаются числа через запятую)")
 
     if problems:
         message = "Некорректная конфигурация:\n" + "\n".join(f"  - {p}" for p in problems)

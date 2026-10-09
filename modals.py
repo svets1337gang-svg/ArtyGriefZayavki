@@ -146,7 +146,7 @@ class ApplicationModal(discord.ui.Modal, title="Заявка в команду �
 
         # --- Повторная проверка прав на подачу (защита от гонок) --------------
         try:
-            allowed, reason = await check_eligibility(user.id)
+            allowed, reason = await check_eligibility(user)
         except Exception:
             log.exception("Ошибка БД при проверке права на подачу заявки (modal).")
             await interaction.followup.send(

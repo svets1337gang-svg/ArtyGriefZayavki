@@ -190,6 +190,45 @@ async def get_application_by_message_id(message_id: int) -> Optional[Dict[str, A
     return _row_to_dict(await _run(_get_application_by_message_id, message_id))
 
 
+def _get_status_counts():
+    conn = _get_connection()
+    return conn.execute(
+        "SELECT status, COUNT(*) AS count FROM applications GROUP BY status"
+    ).fetchall()
+
+
+async def get_status_counts() -> Dict[str, int]:
+    """Количество заявок по статусам: {'Pending': 2, 'Approved': 5, ...}."""
+    rows: Sequence[sqlite3.Row] = await _run(_get_status_counts)
+    return {row["status"]: int(row["count"]) for row in rows}
+
+
+def _get_mode_counts():
+    conn = _get_connection()
+    return conn.execute(
+        "SELECT mode, COUNT(*) AS count FROM applications GROUP BY mode"
+    ).fetchall()
+
+
+async def get_mode_counts() -> Dict[str, int]:
+    """Количество заявок по режимам: {'RW': 3, 'FT': 4}."""
+    rows: Sequence[sqlite3.Row] = await _run(_get_mode_counts)
+    return {row["mode"]: int(row["count"]) for row in rows}
+
+
+def _get_pending_applications():
+    conn = _get_connection()
+    return conn.execute(
+        "SELECT * FROM applications WHERE status = 'Pending' ORDER BY timestamp, id"
+    ).fetchall()
+
+
+async def get_pending_applications() -> List[Dict[str, Any]]:
+    """Все заявки со статусом Pending, старейшие первыми."""
+    rows: Sequence[sqlite3.Row] = await _run(_get_pending_applications)
+    return [dict(row) for row in rows]
+
+
 def _update_application_status(application_id: int, status: str, expected_status: Optional[str]) -> bool:
     conn = _get_connection()
     with conn:

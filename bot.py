@@ -23,6 +23,9 @@ from views import (
     ApplicationPanelView,
     ApproveButton,
     RejectButton,
+    apply_role,
+    build_pending_embed,
+    build_stats_embed,
 )
 from web import web_server
 
@@ -480,6 +483,100 @@ async def open_recruitment(interaction: discord.Interaction) -> None:
         )
 
     log.info("Набор открыт модератором %s.", interaction.user.id)
+
+
+@bot.tree.command(
+    name="выдатькд",
+    description=f"Выдать пользователю ограничение на подачу заявки на {config.REJECTION_COOLDOWN_DAYS} дн.",
+)
+@app_commands.guild_only()
+@app_commands.describe(user="Пользователь, которому нужно выдать КД")
+async def give_cooldown(
+    interaction: discord.Interaction,
+    user: discord.Member,
+) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    guild = interaction.guild
+    if guild is None:
+        await interaction.followup.send("❌ Команда доступна только на сервере.", ephemeral=True)
+        return
+
+    expires_at = db.now_ts() + config.cooldown_seconds()
+
+    # 1. Записываем cooldown в БД (повторная выдача перезаписывает срок).
+    try:
+        await db.create_cooldown(user.id, config.REJECTED_ROLE_ID, expires_at)
+    except Exception:
+        log.exception("Ошибка БД при выдаче cooldown пользователю %s.", user.id)
+        await interaction.followup.send(
+            "❌ Не удалось выдать КД (ошибка БД).", ephemeral=True
+        )
+        return
+
+    # 2. Пытаемся выдать роль отказа. Роль снимет cooldown_watcher по истечении срока.
+    role_ok, role_reason = await apply_role(guild, user, config.REJECTED_ROLE_ID)
+
+    summary = [f"⏳ КД выдан {user.mention} (ID: `{user.id}`) до <t:{expires_at}:f>."]
+    if role_ok:
+        summary.append(f"Роль отказа: {role_reason}.")
+    else:
+        summary.append(f"⚠️ Роль НЕ выдана: {role_reason}. Выдайте вручную.")
+
+    await interaction.followup.send("\n".join(summary), ephemeral=True)
+
+    log.info(
+        "КД выдан пользователю %s модератором %s до %s (role_ok=%s, reason=%s)",
+        user.id,
+        interaction.user.id,
+        expires_at,
+        role_ok,
+        role_reason,
+    )
+
+
+@bot.tree.command(
+    name="статистика",
+    description="Показать статистику по заявкам (всего, по статусам, по режимам).",
+)
+@app_commands.guild_only()
+async def applications_stats(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+    try:
+        status_counts = await db.get_status_counts()
+        mode_counts = await db.get_mode_counts()
+    except Exception:
+        log.exception("Ошибка БД при получении статистики заявок.")
+        await interaction.followup.send("❌ Внутренняя ошибка базы данных.", ephemeral=True)
+        return
+
+    stats = {
+        "total": sum(status_counts.values()),
+        "by_status": {status: status_counts.get(status, 0) for status in ("Pending", "Approved", "Rejected")},
+        "by_mode": {mode: mode_counts.get(mode, 0) for mode in config.MODES},
+    }
+    await interaction.followup.send(embed=build_stats_embed(stats), ephemeral=True)
+
+
+@bot.tree.command(
+    name="ожидание",
+    description="Показать заявки, ожидающие рассмотрения модерацией.",
+)
+@app_commands.guild_only()
+async def pending_applications(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+    try:
+        pending = await db.get_pending_applications()
+    except Exception:
+        log.exception("Ошибка БД при получении списка заявок на рассмотрении.")
+        await interaction.followup.send("❌ Внутренняя ошибка базы данных.", ephemeral=True)
+        return
+
+    if not pending:
+        await interaction.followup.send("ℹ️ Нет заявок на рассмотрении.", ephemeral=True)
+        return
+
+    await interaction.followup.send(embed=build_pending_embed(pending), ephemeral=True)
 
 
 @bot.tree.error

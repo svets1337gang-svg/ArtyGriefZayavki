@@ -13,7 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import discord
 
@@ -47,15 +47,44 @@ async def safe_respond(interaction: discord.Interaction, content: str) -> None:
         log.warning("Не удалось ответить на interaction: %s", exc)
 
 
-async def check_eligibility(user_id: int) -> Tuple[bool, Optional[str]]:
-    """Можно ли пользователю подать новую заявку.
+def get_blacklist_blocked_role(member: discord.Member) -> Optional[discord.Role]:
+    """Возвращает первую роль участника из BLACKLIST_ROLE_IDS или None."""
+    if not config.BLACKLIST_ROLE_IDS:
+        return None
+    blacklist = set(config.BLACKLIST_ROLE_IDS)
+    for role in member.roles:
+        if role.id in blacklist:
+            return role
+    return None
 
-    Порядок проверок: Pending -> активный cooldown -> (опц.) Approved.
+
+async def check_eligibility(member: discord.Member) -> Tuple[bool, Optional[str]]:
+    """Можно ли участнику подать новую заявку.
+
+    Порядок проверок: чёрный список ролей -> Pending -> активный cooldown ->
+    (опц.) Approved.
 
     Одобренная заявка по умолчанию НЕ блокирует новую подачу: пользователь может
     подать заявку повторно (например, на второй режим или после ухода из команды).
     Поведение переключается флагом config.BLOCK_AFTER_APPROVAL.
     """
+    user_id = member.id
+
+    blocked_role = (
+        get_blacklist_blocked_role(member)
+        if isinstance(member, discord.Member)
+        else None
+    )
+    if blocked_role is not None:
+        # Название роли пользователю не сообщаем намеренно; детали — в логах.
+        log.info(
+            "Подача заявки заблокирована: пользователь %s имеет роль %s (id=%s) из чёрного списка.",
+            user_id,
+            blocked_role.name,
+            blocked_role.id,
+        )
+        return False, "❌ Вы не можете подать заявку."
+
     pending = await db.get_pending_application(user_id)
     if pending is not None:
         return False, "❌ У вас уже есть заявка на рассмотрении."
@@ -111,6 +140,80 @@ def build_decision_dm_embed(*, approved: bool, cooldown_expires: Optional[int] =
             color=COLOR_REJECTED,
             timestamp=dt.datetime.now(dt.timezone.utc),
         )
+    return embed
+
+
+def _application_jump_url(mode: str, message_id: Optional[int]) -> Optional[str]:
+    """Ссылка на сообщение модерации. None, если message_id ещё не сохранён."""
+    if not message_id:
+        return None
+    channel_id = (
+        config.RW_APPLICATION_CHANNEL_ID
+        if mode == "RW"
+        else config.FT_APPLICATION_CHANNEL_ID
+    )
+    return f"https://discord.com/channels/{config.GUILD_ID}/{channel_id}/{message_id}"
+
+
+def build_stats_embed(stats: Dict[str, Any]) -> discord.Embed:
+    by_status = stats["by_status"]
+    by_mode = stats["by_mode"]
+    embed = discord.Embed(
+        title="📊 Статистика заявок",
+        color=COLOR_PENDING,
+        timestamp=dt.datetime.now(dt.timezone.utc),
+    )
+    embed.add_field(name="Всего заявок", value=str(stats["total"]), inline=False)
+    embed.add_field(
+        name="По статусам",
+        value=(
+            f"⏳ На рассмотрении: {by_status['Pending']}\n"
+            f"✅ Одобрено: {by_status['Approved']}\n"
+            f"❌ Отклонено: {by_status['Rejected']}"
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="По режимам",
+        value=f"RW: {by_mode['RW']}\nFT: {by_mode['FT']}",
+        inline=True,
+    )
+    return embed
+
+
+_PENDING_DESC_BUDGET = 4000  # запас под лимит описания Embed (4096)
+
+
+def build_pending_embed(pending: List[Dict[str, Any]]) -> discord.Embed:
+    total = len(pending)
+    lines: List[str] = []
+    used = 0
+    shown = 0
+    for app in pending:
+        app_id = int(app["id"])
+        user_id = int(app["user_id"])
+        mode = app["mode"]
+        timestamp = int(app["timestamp"])
+        url = _application_jump_url(mode, app.get("message_id"))
+        link = f"[открыть]({url})" if url else "—"
+        line = f"**#{app_id}** · <@{user_id}> · `{mode}` · <t:{timestamp}:F> · {link}"
+        if used + len(line) + 1 > _PENDING_DESC_BUDGET:
+            break
+        lines.append(line)
+        used += len(line) + 1
+        shown += 1
+
+    description = "\n".join(lines)
+    if shown < total:
+        description += f"\n\n…и ещё {total - shown} (показаны первые {shown} из {total})."
+
+    embed = discord.Embed(
+        title="⏳ Заявки на рассмотрении",
+        description=description,
+        color=COLOR_PENDING,
+        timestamp=dt.datetime.now(dt.timezone.utc),
+    )
+    embed.set_footer(text=f"Всего на рассмотрении: {total}")
     return embed
 
 
@@ -224,7 +327,7 @@ class ApplicationPanelView(discord.ui.View):
             return
 
         try:
-            allowed, reason = await check_eligibility(interaction.user.id)
+            allowed, reason = await check_eligibility(interaction.user)
         except Exception:
             log.exception("Ошибка БД при проверке права на подачу заявки.")
             await safe_respond(interaction, "❌ Внутренняя ошибка. Попробуйте позже.")
@@ -387,7 +490,7 @@ async def _strip_buttons(interaction: discord.Interaction) -> None:
         log.warning("Не удалось убрать кнопки с сообщения заявки: %s", exc)
 
 
-async def _apply_role(
+async def apply_role(
     guild: discord.Guild,
     member: Optional[discord.Member],
     role_id: int,
@@ -488,7 +591,7 @@ async def process_decision(
             log.warning("Не удалось получить участника %s: %s", user_id, exc)
 
     role_id = config.CANDIDATE_ROLE_ID if approve else config.REJECTED_ROLE_ID
-    role_ok, role_reason = await _apply_role(guild, member, role_id)
+    role_ok, role_reason = await apply_role(guild, member, role_id)
 
     # Cooldown ставим всегда (даже если роль выдать не удалось): повторная подача
     # блокируется данными в SQLite, а не наличием роли в Discord.
