@@ -27,6 +27,7 @@ COLOR_APPROVED = discord.Color.green()
 COLOR_REJECTED = discord.Color.red()
 
 PANEL_BUTTON_CUSTOM_ID = "application_panel:open"
+PANEL_DOCUMENTS_BUTTON_CUSTOM_ID = "application_panel:documents_info"
 PANEL_MESSAGE_SETTING_KEY = "panel_message_id"
 PANEL_CHANNEL_SETTING_KEY = "panel_channel_id"
 RECRUITMENT_STATUS_SETTING_KEY = "recruitment_open"
@@ -143,6 +144,27 @@ def build_decision_dm_embed(*, approved: bool, cooldown_expires: Optional[int] =
     return embed
 
 
+def build_documents_info_embed() -> discord.Embed:
+    """Embed для кнопки «Какие документы нужны» на панели подачи."""
+    return discord.Embed(
+        title="📄 Какие документы нужны",
+        description=config.DOCUMENTS_INFO_TEXT,
+        color=COLOR_PENDING,
+    )
+
+
+def build_documents_request_dm_embed(moderator: discord.abc.User) -> discord.Embed:
+    """Embed для ЛС пользователю после нажатия модератором «Запросить документы»."""
+    embed = discord.Embed(
+        title=config.DOCUMENTS_DM_TITLE,
+        description=config.DOCUMENTS_DM_TEXT,
+        color=COLOR_PENDING,
+        timestamp=dt.datetime.now(dt.timezone.utc),
+    )
+    embed.add_field(name="Скинуть", value=moderator.mention, inline=False)
+    return embed
+
+
 def _application_jump_url(mode: str, message_id: Optional[int]) -> Optional[str]:
     """Ссылка на сообщение модерации. None, если message_id ещё не сохранён."""
     if not message_id:
@@ -176,6 +198,11 @@ def build_stats_embed(stats: Dict[str, Any]) -> discord.Embed:
     embed.add_field(
         name="По режимам",
         value=f"RW: {by_mode['RW']}\nFT: {by_mode['FT']}",
+        inline=True,
+    )
+    embed.add_field(
+        name="📄 Документы",
+        value=f"Запрошены: {stats.get('documents_requested', 0)}",
         inline=True,
     )
     return embed
@@ -343,6 +370,22 @@ class ApplicationPanelView(discord.ui.View):
             ephemeral=True,
         )
 
+    @discord.ui.button(
+        label="Какие документы нужны",
+        emoji="📄",
+        style=discord.ButtonStyle.secondary,
+        custom_id=PANEL_DOCUMENTS_BUTTON_CUSTOM_ID,
+    )
+    async def show_documents_info(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        await interaction.response.send_message(
+            embed=build_documents_info_embed(),
+            ephemeral=True,
+        )
+
 
 class ModeSelectView(discord.ui.View):
     """Ephemeral-сообщение с Select Menu. Живёт только в рамках одной сессии."""
@@ -470,6 +513,46 @@ class RejectButton(_DecisionButton, template=r"application_reject:(?P<app_id>[0-
         return cls(int(match["app_id"]))
 
 
+class DocumentsRequestButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"application_request_documents:(?P<app_id>[0-9]+)",
+):
+    """Persistent-кнопка запроса документов у кандидата.
+
+    Работает после перезапуска: id заявки лежит в custom_id, состояние запроса —
+    в SQLite (documents_requested_at).
+    """
+
+    def __init__(self, application_id: int) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label="Запросить документы",
+                emoji="📄",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"application_request_documents:{application_id}",
+            )
+        )
+        self.application_id = application_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Button,
+        match: "re.Match[str]",
+    ) -> "DocumentsRequestButton":
+        return cls(int(match["app_id"]))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not isinstance(interaction.user, discord.Member):
+            await safe_respond(interaction, "❌ Действие доступно только на сервере.")
+            return False
+        return True
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await process_documents_request(interaction, self.application_id)
+
+
 class ModerationView(discord.ui.View):
     """View с кнопками решения. Нужен только для первичной отправки сообщения:
     после перезапуска кнопки восстанавливаются через bot.add_dynamic_items()."""
@@ -478,6 +561,97 @@ class ModerationView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(ApproveButton(application_id))
         self.add_item(RejectButton(application_id))
+        self.add_item(DocumentsRequestButton(application_id))
+
+
+# --------------------------------------------------------------------------- #
+# Обработка запроса документов
+# --------------------------------------------------------------------------- #
+async def process_documents_request(
+    interaction: discord.Interaction,
+    application_id: int,
+) -> None:
+    """Шлёт кандидату в ЛС embed с запросом паспорта; контакт — нажавший модератор."""
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except (discord.HTTPException, discord.NotFound) as exc:
+        log.warning("Interaction устарел: %s", exc)
+        return
+
+    try:
+        application = await db.get_application(application_id)
+    except Exception:
+        log.exception("Ошибка БД при чтении заявки %s.", application_id)
+        await safe_respond(interaction, "❌ Внутренняя ошибка базы данных.")
+        return
+
+    if application is None:
+        await safe_respond(interaction, "❌ Заявка не найдена в базе данных (устаревшее сообщение).")
+        return
+
+    user_id = int(application["user_id"])
+
+    # Атомарный «захват»: повторное нажатие кнопки вторым модератором не удвоит ЛС.
+    try:
+        marked = await db.mark_documents_requested(application_id, interaction.user.id)
+    except Exception:
+        log.exception("Ошибка БД при отметке запроса документов для заявки %s.", application_id)
+        await safe_respond(interaction, "❌ Внутренняя ошибка базы данных.")
+        return
+
+    if not marked:
+        await safe_respond(interaction, "ℹ️ Документы по этой заявке уже были запрошены.")
+        return
+
+    dm_embed = build_documents_request_dm_embed(interaction.user)
+    dm_ok = await send_dm(interaction.client, user_id, embed=dm_embed)
+
+    # Если ЛС не доставлено, откатываем отметку — иначе запрос «залипнет»
+    # в базе и модератор не сможет повторить его после решения проблемы.
+    if not dm_ok:
+        try:
+            await db.clear_documents_request(application_id)
+        except Exception:
+            log.exception("Не удалось откатить отметку запроса документов для заявки %s.", application_id)
+        await safe_respond(
+            interaction,
+            "⚠️ ЛС не доставлено (закрыты или ошибка API). Документы не запрошены — "
+            "попробуйте позже или свяжитесь с кандидатом другим способом.",
+        )
+        log.warning(
+            "Не удалось доставить запрос документов пользователю %s (заявка %s).",
+            user_id,
+            application_id,
+        )
+        return
+
+    # Обновляем embed заявки, чтобы модераторы видели факт запроса.
+    try:
+        message = interaction.message
+        if message is not None and message.embeds:
+            embed = message.embeds[0]
+            embed.add_field(
+                name="📄 Документы",
+                value=f"Запрошены модератором: {interaction.user.mention}",
+                inline=False,
+            )
+            await message.edit(embed=embed)
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+        log.warning("Не удалось обновить сообщение заявки %s: %s", application_id, exc)
+
+    await safe_respond(
+        interaction,
+        f"✅ Запрос документов отправлен <@{user_id}> в личные сообщения.\n"
+        f"Контакт для отправки: {interaction.user.mention}.",
+    )
+
+    log.info(
+        "Документы запрошены по заявке %s модератором %s (dm_ok=%s)",
+        application_id,
+        interaction.user.id,
+        dm_ok,
+    )
+
 
 # --------------------------------------------------------------------------- #
 # Обработка решения модератора

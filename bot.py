@@ -22,6 +22,7 @@ from views import (
     RECRUITMENT_STATUS_SETTING_KEY,
     ApplicationPanelView,
     ApproveButton,
+    DocumentsRequestButton,
     RejectButton,
     apply_role,
     build_pending_embed,
@@ -83,6 +84,8 @@ async def build_panel_embed() -> discord.Embed:
             "**Важно:**\n"
             f"• Подать заявку можно с **{config.MIN_AGE} лет**.\n"
             "• Потребуется подтверждение возраста.\n"
+            "• Мы принимаем **только паспорт** — подробности в кнопке "
+            "«📄 Какие документы нужны».\n"
             f"• После отказа повторная подача доступна через "
             f"**{config.REJECTION_COOLDOWN_DAYS} дней**.\n"
             "• Откройте личные сообщения от участников сервера, иначе вы не получите ответ."
@@ -183,7 +186,7 @@ class ApplicationBot(commands.Bot):
         await web_server.start()
         # Восстановление persistent-компонентов.
         self.add_view(ApplicationPanelView())
-        self.add_dynamic_items(ApproveButton, RejectButton)
+        self.add_dynamic_items(ApproveButton, RejectButton, DocumentsRequestButton)
 
         # Синхронизация slash-команд: в гильдии — мгновенно.
         guild = discord.Object(id=config.GUILD_ID)
@@ -545,6 +548,7 @@ async def applications_stats(interaction: discord.Interaction) -> None:
     try:
         status_counts = await db.get_status_counts()
         mode_counts = await db.get_mode_counts()
+        documents_requested = await db.get_documents_request_count()
     except Exception:
         log.exception("Ошибка БД при получении статистики заявок.")
         await interaction.followup.send("❌ Внутренняя ошибка базы данных.", ephemeral=True)
@@ -554,6 +558,7 @@ async def applications_stats(interaction: discord.Interaction) -> None:
         "total": sum(status_counts.values()),
         "by_status": {status: status_counts.get(status, 0) for status in ("Pending", "Approved", "Rejected")},
         "by_mode": {mode: mode_counts.get(mode, 0) for mode in config.MODES},
+        "documents_requested": documents_requested,
     }
     await interaction.followup.send(embed=build_stats_embed(stats), ephemeral=True)
 

@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS applications (
     mode       TEXT    NOT NULL CHECK (mode IN ('RW', 'FT')),
     status     TEXT    NOT NULL CHECK (status IN ('Pending', 'Approved', 'Rejected')),
     message_id INTEGER,
-    timestamp  INTEGER NOT NULL
+    timestamp  INTEGER NOT NULL,
+    documents_requested_by INTEGER,
+    documents_requested_at INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_applications_user   ON applications (user_id, status);
@@ -94,6 +96,26 @@ def _init_db() -> None:
     conn = _get_connection()
     with conn:
         conn.executescript(_SCHEMA)
+    _migrate_applications_columns()
+
+
+# Колонки, добавленные позже базовой схемы. На существующей БД их добирает
+# ALTER TABLE: CREATE TABLE IF NOT EXISTS уже созданную таблицу не трогает.
+_APPLICATION_MIGRATIONS = (
+    ("documents_requested_by", "INTEGER"),
+    ("documents_requested_at", "INTEGER"),
+)
+
+
+def _migrate_applications_columns() -> None:
+    conn = _get_connection()
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(applications)")}
+    for column, column_type in _APPLICATION_MIGRATIONS:
+        if column in existing:
+            continue
+        with conn:
+            conn.execute(f"ALTER TABLE applications ADD COLUMN {column} {column_type}")
+        log.info("Миграция БД: в applications добавлена колонка %s.", column)
 
 
 async def init_db() -> None:
@@ -272,6 +294,74 @@ def _set_application_message_id(application_id: int, message_id: int) -> None:
 
 async def set_application_message_id(application_id: int, message_id: int) -> None:
     await _run(_set_application_message_id, application_id, message_id)
+
+
+def _mark_documents_requested(application_id: int, moderator_id: int, moment: int) -> bool:
+    conn = _get_connection()
+    with conn:
+        cursor = conn.execute(
+            "UPDATE applications "
+            "SET documents_requested_by = ?, documents_requested_at = ? "
+            "WHERE id = ? AND documents_requested_at IS NULL",
+            (moderator_id, moment, application_id),
+        )
+    return cursor.rowcount > 0
+
+
+async def mark_documents_requested(
+    application_id: int,
+    moderator_id: int,
+    moment: Optional[int] = None,
+) -> bool:
+    """Отмечает, что документы запрошены. Возвращает False, если уже были запрошены.
+
+    Атомарность (WHERE documents_requested_at IS NULL) защищает от двойного
+    нажатия кнопки — так же, как смена статуса заявки.
+    """
+    return await _run(_mark_documents_requested, application_id, moderator_id, moment or now_ts())
+
+
+def _get_documents_request(application_id: int):
+    conn = _get_connection()
+    return conn.execute(
+        "SELECT documents_requested_by, documents_requested_at "
+        "FROM applications WHERE id = ?",
+        (application_id,),
+    ).fetchone()
+
+
+async def get_documents_request(application_id: int) -> Optional[Dict[str, Any]]:
+    """Возвращает {documents_requested_by, documents_requested_at} или None."""
+    return _row_to_dict(await _run(_get_documents_request, application_id))
+
+
+def _get_documents_request_count():
+    conn = _get_connection()
+    return conn.execute(
+        "SELECT COUNT(*) AS count FROM applications WHERE documents_requested_at IS NOT NULL"
+    ).fetchone()
+
+
+async def get_documents_request_count() -> int:
+    """Сколько заявок получили запрос документов."""
+    row = await _run(_get_documents_request_count)
+    return int(row["count"]) if row is not None else 0
+
+
+def _clear_documents_request(application_id: int) -> None:
+    conn = _get_connection()
+    with conn:
+        conn.execute(
+            "UPDATE applications "
+            "SET documents_requested_by = NULL, documents_requested_at = NULL "
+            "WHERE id = ?",
+            (application_id,),
+        )
+
+
+async def clear_documents_request(application_id: int) -> None:
+    """Откат: снимает отметку, если ЛС с запросом документов не доставлено."""
+    await _run(_clear_documents_request, application_id)
 
 
 # --------------------------------------------------------------------------- #
